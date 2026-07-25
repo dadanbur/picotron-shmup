@@ -1,4 +1,4 @@
---[[pod_format="raw",created="2026-07-23 07:34:50",modified="2026-07-25 17:12:23",revision=368]]
+--[[pod_format="raw",created="2026-07-23 07:34:50",modified="2026-07-25 19:27:44",revision=437]]
 SCREEN_WIDTH  = 480
 SCREEN_HEIGHT = 270
 
@@ -59,8 +59,15 @@ enemies={}
 EXPLOSION_DURATION = 30
 explosions={}
 
+EXPLOSION_PARTICLES = 50
 PARTICLES_DURATION = 30
+PARTICLE_PALETTE_1 = {7,10,9,8,2,5}
+PARTICLE_PALETTE_2 = {7,28,12,16,13,1}
 particles={}
+
+SHOCKWAVE_DURATION=30
+SHOCKWAVE_SIZE=10
+shockwaves={}
 
 function _init()
 	cls(0)
@@ -76,6 +83,7 @@ function _draw()
 	draw_bullets()
 	--draw_explosions()
 	draw_particles()
+	draw_shockwaves()
 	draw_frame()
 	draw_hud()
 end
@@ -128,7 +136,6 @@ function draw_hud()
 end
 
 function draw_frame()
-
     -- TOP
     rectfill(
         GAME_X - MARGIN,
@@ -164,7 +171,6 @@ function draw_frame()
         GAME_Y + GAME_HEIGHT - 1,
         1
     )
-
 end
 
 function draw_ship()
@@ -211,14 +217,21 @@ end
 
 function draw_particles()
 	for p in all(particles) do
-		local col = 7
-		local particle_palette = {7, 10, 9, 8, 2, 5}
+		local particle_palette = PARTICLE_PALETTE_1
+		
+		if p.type == 2 then
+			particle_palette = PARTICLE_PALETTE_2
+		end
+		
 		local progress = 1 - p.duration / PARTICLES_DURATION
 		local index = flr(progress * (#particle_palette - 1)) + 1
 		local col = particle_palette[index]
 	
-		--rectfill(p.x,p.y,p.x+1,p.y+1,7)
-		circfill(p.x,p.y,p.size,col)
+		if p.type == 3 then
+			rectfill(p.x,p.y,p.x+1,p.y+1,7)
+		else
+			circfill(p.x,p.y,p.size,col)
+		end
 		p.x+=p.sx
 		p.y+=p.sy
 		
@@ -226,11 +239,21 @@ function draw_particles()
 		p.sy *= 0.9
 		
 		p.duration-=1
-		if p.duration < 0 then
+		if p.duration <= 0 then
 			p.size -= 0.5
 			if p.size <= 0 then
 			 del(particles,p)
 			end
+		end
+	end
+end
+
+function draw_shockwaves()
+	for s in all(shockwaves) do
+		circ(s.x,s.y,s.r,s.col)
+		s.r+=s.speed
+		if s.r > s.size then
+			del(shockwaves,s)
 		end
 	end
 end
@@ -314,7 +337,7 @@ function shoot_bullet()
 	ship.bullet_timer = SHIP_BULLET_FREQ
 end
 
-function explosion_old(x,y)
+function ship_explosion(x,y)
 	local e = {
 		x = x,
 		y = y,
@@ -325,7 +348,10 @@ function explosion_old(x,y)
 	add(explosions, e)
 end
 
-function explosion(x,y)
+function explosion(x,y,_type)
+	if _type == nil then
+		_type = 1
+	end
 
 	local p = {
 		x = x,
@@ -333,21 +359,76 @@ function explosion(x,y)
 		sx = 0,
 		sy = 0,
 		size = 16,
+		type = _type,
 		duration = PARTICLES_DURATION
 	}
 	add(particles, p)
 
-	for i=1,50 do
+	for i=1,EXPLOSION_PARTICLES do
 		local p = {
 			x = x,
 			y = y,
 			sx = (rnd() - 0.5) * 6,
 			sy = (rnd() - 0.5) * 6,
 			size = 1 + rnd (8),
+			type = _type,
 			duration = PARTICLES_DURATION - rnd(PARTICLES_DURATION)
 		}
 		add(particles, p)
 	end
+	
+	for i=1,EXPLOSION_PARTICLES do
+		local p = {
+			x = x,
+			y = y,
+			sx = (rnd() - 0.5) * 6,
+			sy = (rnd() - 0.5) * 6,
+			size = 1,
+			type = 3,
+			duration = PARTICLES_DURATION - rnd(PARTICLES_DURATION)
+		}
+		add(particles, p)
+	end
+	
+	create_shockwave(x,y,SHOCKWAVE_SIZE*5,2,7)
+end
+
+function create_sparks(x,y)
+	for i=1,2 do
+		local p = {
+			x = x,
+			y = y,
+			sx = (rnd() - 0.5) * 6,
+			sy = (rnd() - 1) * 6,
+			size = 1,
+			type = 3,
+			duration = PARTICLES_DURATION - rnd(PARTICLES_DURATION)
+		}
+		add(particles, p)
+	end
+end
+
+function create_shockwave(x,y,size,speed,col)
+	if size == nil then
+		size = SHOCKWAVE_SIZE
+	end
+	if speed == nil then
+		speed = 1
+	end
+	if col == nil then
+		col = 9
+	end
+		
+	local s = {
+		x = x,
+		y = y,
+		r = 1,
+		size = size,
+		col = col,
+		speed = speed,
+		duration = SHOCKWAVE_DURATION
+	}
+	add(shockwaves, s)
 end
 
 function check_enemies_collision()
@@ -359,6 +440,7 @@ function check_enemies_collision()
 		if collision(enemy, ship) then
 			lives -= 1
 			sfx(1)
+			explosion(ship.x + ship.w/2,ship.y + ship.h/2,2)
 			ship.invulnerable = SHIP_INVULNERABILITY
 		end
 	end
@@ -370,6 +452,8 @@ function check_bullets_collision()
 			if collision(enemy, bullet) then
 				sfx(3)
 				del(bullets,bullet)
+				create_shockwave(bullet.x + bullet.w/2, bullet.y + bullet.h/2) 
+				create_sparks(enemy.x + enemy.w/2, enemy.y + enemy.h/2)
 				enemy.hp -= 1
 				enemy.flash = ENEMY_FLASH
 				if enemy.hp <= 0 then
