@@ -1,4 +1,4 @@
---[[pod_format="raw",created="2026-07-23 07:34:50",modified="2026-07-25 08:06:09",revision=326]]
+--[[pod_format="raw",created="2026-07-23 07:34:50",modified="2026-07-25 17:12:23",revision=368]]
 SCREEN_WIDTH  = 480
 SCREEN_HEIGHT = 270
 
@@ -59,6 +59,9 @@ enemies={}
 EXPLOSION_DURATION = 30
 explosions={}
 
+PARTICLES_DURATION = 30
+particles={}
+
 function _init()
 	cls(0)
 	spawn_enemy()
@@ -71,7 +74,8 @@ function _draw()
 	draw_ship()
 	draw_enemies()
 	draw_bullets()
-	draw_explosions()
+	--draw_explosions()
+	draw_particles()
 	draw_frame()
 	draw_hud()
 end
@@ -113,7 +117,7 @@ function draw_hud()
 	rectfill(HUD_X,0,SCREEN_WIDTH - 1, SCREEN_HEIGHT,1)
 	print("SCORE: "..score, HUD_X + MARGIN, 20, 7)
 	--print(ship.y, HUD_X + MARGIN, 20, 7)
-	print("BULLETS: "..#bullets, HUD_X + MARGIN, 30, 7)
+	--print("BULLETS: "..#bullets, HUD_X + MARGIN, 30, 7)
 	for i = 1,max_lives do
 		local sprite = SHIP_LIFE_FULL
 		if (i > lives) then
@@ -205,6 +209,32 @@ function draw_explosions()
 	end
 end
 
+function draw_particles()
+	for p in all(particles) do
+		local col = 7
+		local particle_palette = {7, 10, 9, 8, 2, 5}
+		local progress = 1 - p.duration / PARTICLES_DURATION
+		local index = flr(progress * (#particle_palette - 1)) + 1
+		local col = particle_palette[index]
+	
+		--rectfill(p.x,p.y,p.x+1,p.y+1,7)
+		circfill(p.x,p.y,p.size,col)
+		p.x+=p.sx
+		p.y+=p.sy
+		
+		p.sx *= 0.9
+		p.sy *= 0.9
+		
+		p.duration-=1
+		if p.duration < 0 then
+			p.size -= 0.5
+			if p.size <= 0 then
+			 del(particles,p)
+			end
+		end
+	end
+end
+
 function draw_enemies()
 	for enemy in all(enemies) do
 		if enemy.flash > 0 then
@@ -284,7 +314,7 @@ function shoot_bullet()
 	ship.bullet_timer = SHIP_BULLET_FREQ
 end
 
-function explosion(x,y)
+function explosion_old(x,y)
 	local e = {
 		x = x,
 		y = y,
@@ -293,6 +323,31 @@ function explosion(x,y)
 		frame = 1
 	}
 	add(explosions, e)
+end
+
+function explosion(x,y)
+
+	local p = {
+		x = x,
+		y = y,
+		sx = 0,
+		sy = 0,
+		size = 16,
+		duration = PARTICLES_DURATION
+	}
+	add(particles, p)
+
+	for i=1,50 do
+		local p = {
+			x = x,
+			y = y,
+			sx = (rnd() - 0.5) * 6,
+			sy = (rnd() - 0.5) * 6,
+			size = 1 + rnd (8),
+			duration = PARTICLES_DURATION - rnd(PARTICLES_DURATION)
+		}
+		add(particles, p)
+	end
 end
 
 function check_enemies_collision()
@@ -319,7 +374,7 @@ function check_bullets_collision()
 				enemy.flash = ENEMY_FLASH
 				if enemy.hp <= 0 then
 					del(enemies,enemy)
-					explosion(enemy.x - enemy.w/2,enemy.y - enemy.h/2)
+					explosion(enemy.x + enemy.w/2,enemy.y + enemy.h/2)
 					sfx(2)
 					score += 1
 					spawn_enemy()
