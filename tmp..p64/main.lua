@@ -1,4 +1,4 @@
---[[pod_format="raw",created="2026-07-23 07:34:50",modified="2026-07-26 09:41:35",revision=522]]
+--[[pod_format="raw",created="2026-07-23 07:34:50",modified="2026-07-26 19:24:29",revision=593]]
 SCREEN_WIDTH  = 480
 SCREEN_HEIGHT = 270
 
@@ -22,6 +22,8 @@ for i=1,100 do
 	local s=rnd(1.5) + 0.5
 	add(starfield,{x=x,y=y,speed=s})
 end
+
+timer = 0
 
 score = 0
 max_lives = 4
@@ -75,30 +77,41 @@ enemy_types = {
     [1] = {
         w = 16,
         h = 16,
+        sx = 0,
+        sy = 1.5,
         animation = {16,17,18,19},
-        hp = 1,
+        hp = 2,
         speed = 0.5,
-        score = 100
+        score = 100,
+        attack_mission = "attack_type1"
     },
     [2] = {
         w = 16,
         h = 16,
+        sx = 0,
+        sy = 3,        
         animation = {24,25},
-        hp = 3,
+        hp = 1,
         speed = 1,
-        score = 200
+        score = 200,
+        attack_mission = "attack_type2"
     },
     [3] = {
         w = 16,
         h = 16,
+        sx = 0,
+        sy = 0,        
         animation = {32,33,34,35},
         hp = 3,
         speed = 1,
-        score = 200
+        score = 200,
+        attack_mission = "attack_type3"
     },
     [4] = {
         w = 16,
         h = 16,
+        sx = 0,
+        sy = 0,        
         animation = {40,41,42,43},
         hp = 3,
         speed = 1,
@@ -107,15 +120,18 @@ enemy_types = {
     [5] = {
         w = 28,
         h = 26,
-        animation = {48},
+        sx = 0,
+        sy = 0,        
+        animation = {48,49},
         hp = 10,
         speed = 1,
-        score = 500
+        score = 500,
+        attack_mission = "attack_type5"
     }
     
 }
 
-waves = {
+waves = {	
 	[1]={
 		{0,1,1,1,1,1,1,1,1,0},
 		{0,1,1,1,1,1,1,1,1,0},
@@ -144,36 +160,37 @@ waves = {
 --------------------------
 
 state_manager = {
-    current = nil
+	current = nil
 }
 
 function change_state(new_state)
 
-    if state_manager.current and state_manager.current.leave then
-        state_manager.current.leave()
-    end
-
-    state_manager.current = new_state
-
-    if state_manager.current.enter then
-        state_manager.current.enter()
-    end
+	if state_manager.current and state_manager.current.leave then
+		state_manager.current.leave()
+	end
+	
+	state_manager.current = new_state
+	
+	if state_manager.current.enter then
+		state_manager.current.enter()
+	end
 end
 
 function update_state()
-    state_manager.current.update()
+	state_manager.current.update()
 end
 
 function draw_state()
-    state_manager.current.draw()
+	state_manager.current.draw()
 end
 
 function _update()
-    update_state()
+	timer += 1
+   update_state()
 end
 
 function _draw()
-    draw_state()
+	draw_state()
 end
 
 --------------------------
@@ -724,24 +741,120 @@ function update_bullets()
 	end
 end
 
+ATTACK_INTERVAL = 240
+attack_timer = ATTACK_INTERVAL
+
 function update_enemies()
 	for enemy in all(enemies) do
-		--enemy.y += 1
+		enemy.mission(enemy)
 		enemy.frame += 0.2
 		if enemy.frame >= #enemy.animation + 1 then
 			enemy.frame = 1
 		end
 		if enemy.y > GAME_Y + GAME_HEIGHT then
 			del(enemies,enemy)
-			spawn_enemy()
+			--spawn_enemy()
 		end
-		--enemy.x += rnd(2)-1
+
 	end
+	
+	attack_timer -= 1
+	if attack_timer <= 0 then
+        launch_attack()
+        attack_timer = ATTACK_INTERVAL
+	end	
 	
 	if #enemies == 0 then
 		next_wave()
 	end
 end
+
+function launch_attack()
+    local candidates = {}
+
+    for enemy in all(enemies) do
+        if enemy.mission == missions.waiting then
+            add(candidates, enemy)
+        end
+    end
+
+	if #candidates > 0 then
+		local enemy = candidates[flr(rnd(#candidates)) + 1]
+		--enemy.mission = missions[enemy.attack_mission] or missions.attack
+		enemy.mission = missions.prepare_attack
+	end
+end
+
+missions = {}
+
+missions.flying = function(e)
+    -- basic easing function
+    e.y += (e.posy - e.y) / 16
+
+    if abs(e.y - e.posy) < 0.5 then
+        e.y = e.posy
+        e.mission = missions.waiting
+    end
+end
+
+missions.waiting = function(e)
+    -- no hace nada
+end
+
+missions.prepare_attack = function(e)
+	if e.shake <= 0 then
+		e.mission = missions[e.attack_mission] or missions.attack
+		return
+	end
+
+	e.sy = 0
+	e.x += sin(timer/6)
+	e.shake -= 1
+end
+
+missions.attack = function(e)
+	e.sy = 1
+	e.x += e.sx
+	e.y += e.sy
+end
+
+missions.attack_type1 = function(e)
+	e.sy = 1
+	e.x += sin(timer/64)
+	e.y += e.sy
+end
+
+missions.attack_type2 = function(e)
+	e.sy = 1
+	e.x += sin(timer/32)
+	e.y += e.sy
+end
+
+missions.attack_type3 = function(e)
+	if e.sx == 0 then
+		e.sy = 2
+		e.y += e.sy
+		
+		if ship.y <= e.y then
+			e.sy = 0
+			if ship.x < e.x then
+				e.sx = -2
+			else
+				e.sx = 2
+			end
+		end
+			
+	else
+		e.x += e.sx
+	end
+end
+
+missions.attack_type5 = function(e)
+	e.sy = 0.5
+	e.x += e.sx
+	e.y += e.sy
+end
+
 
 function next_wave()
 	wave += 1
@@ -749,6 +862,7 @@ function next_wave()
 end
 
 function spawn_wave()
+	sfx(4)
 	place_enemies()
 end
 
@@ -769,16 +883,23 @@ function spawn_enemy(x,y,_type)
 	
 	local e = {
         x=x,
-        y=y,
+        y=y-140,
+        posx=x,
+        posy=y,
+        sx=def.sx,
+        sy=def.sy,
         w=def.w,
         h=def.h,
         type=_type,
+        mission=missions.flying,
+        attack_mission = def.attack_mission,
         animation=def.animation,
         hp=def.hp,
         speed=def.speed,
         score=def.score,
         frame=1,
-        flash=0
+        flash=0,
+        shake=60
     }
 		
 	add(enemies,e)
