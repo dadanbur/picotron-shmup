@@ -1,4 +1,4 @@
---[[pod_format="raw",created="2026-07-23 07:34:50",modified="2026-07-25 19:27:44",revision=437]]
+--[[pod_format="raw",created="2026-07-23 07:34:50",modified="2026-07-26 07:52:23",revision=494]]
 SCREEN_WIDTH  = 480
 SCREEN_HEIGHT = 270
 
@@ -25,9 +25,10 @@ end
 score = 0
 max_lives = 4
 lives = 4
+wave = 1
 
 SHIP_SIZE = 16
-SHIP_LIFE_FULL  = 7
+SHIP_LIFE_FULL  = 14
 SHIP_LIFE_EMPTY = 15
 SHIP_INVULNERABILITY = 90
 SHIP_BULLET_FREQ=8
@@ -69,9 +70,66 @@ SHOCKWAVE_DURATION=30
 SHOCKWAVE_SIZE=10
 shockwaves={}
 
+enemy_types = {
+    [1] = {
+        w = 16,
+        h = 16,
+        animation = {16,17,18,19},
+        hp = 1,
+        speed = 0.5,
+        score = 100
+    },
+    [2] = {
+        w = 16,
+        h = 16,
+        animation = {24,25},
+        hp = 3,
+        speed = 1,
+        score = 200
+    },
+    [3] = {
+        w = 16,
+        h = 16,
+        animation = {32,33,34,35},
+        hp = 3,
+        speed = 1,
+        score = 200
+    },
+    [4] = {
+        w = 16,
+        h = 16,
+        animation = {40,41,42,43},
+        hp = 3,
+        speed = 1,
+        score = 200
+    },
+    [5] = {
+        w = 28,
+        h = 26,
+        animation = {48},
+        hp = 10,
+        speed = 1,
+        score = 500
+    }
+    
+}
+
+waves = {
+	[1]={
+		{0,1,1,1,1,1,1,1,1,0},
+		{0,1,1,1,1,1,1,1,1,0},
+		{0,1,1,1,1,1,1,1,1,0},
+		{0,1,1,1,1,1,1,1,1,0}},
+	[2]={
+		{0,2,1,1,1,1,1,1,2,0},
+		{0,2,1,1,1,1,1,1,2,0},
+		{0,2,1,1,1,1,1,1,2,0},
+		{0,2,1,1,1,1,1,1,2,0}}
+}
+
 function _init()
 	cls(0)
-	spawn_enemy()
+	place_enemies()
 end
 
 function _draw()
@@ -88,8 +146,7 @@ function _draw()
 	draw_hud()
 end
 
-function draw_starfield()
-	--pset(10,10,7)
+function draw_starfield()	
 	for star in all(starfield) do
 		local x = star.x
 		local y = star.y
@@ -103,6 +160,7 @@ function draw_starfield()
 			col = 1
 		end
 			
+		--pset(10,10,7)
 		rectfill(x,y,x+1,y+1,col)
 	end
 end
@@ -124,6 +182,7 @@ end
 function draw_hud() 
 	rectfill(HUD_X,0,SCREEN_WIDTH - 1, SCREEN_HEIGHT,1)
 	print("SCORE: "..score, HUD_X + MARGIN, 20, 7)
+	print("WAVE: "..wave, HUD_X + MARGIN, 30, 7)
 	--print(ship.y, HUD_X + MARGIN, 20, 7)
 	--print("BULLETS: "..#bullets, HUD_X + MARGIN, 30, 7)
 	for i = 1,max_lives do
@@ -460,8 +519,8 @@ function check_bullets_collision()
 					del(enemies,enemy)
 					explosion(enemy.x + enemy.w/2,enemy.y + enemy.h/2)
 					sfx(2)
-					score += 1
-					spawn_enemy()
+					score += enemy.score
+					--spawn_enemy()
 				end
 				break
 			end
@@ -495,7 +554,7 @@ end
 
 function update_enemies()
 	for enemy in all(enemies) do
-		enemy.y += 1
+		--enemy.y += 1
 		enemy.frame += 0.2
 		if enemy.frame >= #enemy.animation + 1 then
 			enemy.frame = 1
@@ -506,19 +565,50 @@ function update_enemies()
 		end
 		--enemy.x += rnd(2)-1
 	end
+	
+	if #enemies == 0 then
+		next_wave()
+	end
 end
 
-function spawn_enemy()
+function next_wave()
+	wave += 1
+	spawn_wave()
+end
+
+function spawn_wave()
+	place_enemies()
+end
+
+function place_enemies()
+	local e=waves[wave]
+	
+	for y = 1, #e do
+		for x = 1,#e[y] do
+			if e[y][x] != 0 then
+				spawn_enemy(x*24-6,y*24+20,e[y][x])
+			end
+		end	
+	end
+end
+
+function spawn_enemy(x,y,_type)
+	local def = enemy_types[_type]
+	
 	local e = {
-		x = GAME_X + rnd(GAME_WIDTH - ENEMY_SIZE),
-		y = -ENEMY_SIZE,
-		w = 16,
-		h = 16,
-		animation = {16,17,18,19},
-		frame=1,
-		hp=5,
-		flash=0
-	}
+        x=x,
+        y=y,
+        w=def.w,
+        h=def.h,
+        type=_type,
+        animation=def.animation,
+        hp=def.hp,
+        speed=def.speed,
+        score=def.score,
+        frame=1,
+        flash=0
+    }
+		
 	add(enemies,e)
 end
 
